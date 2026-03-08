@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  BARTENDER
+  WAITER
+}
+
+enum TableSection {
+  MAIN_FLOOR
+  VIP
+  BAR_COUNTER
+}
+
+enum TableStatus {
+  EMPTY
+  OCCUPIED
+  ATTENTION
+}
+
+enum TabType {
+  TABLE_TAB
+  QUICK_SALE
+  NAMED_TAB
+}
+
+enum TabStatus {
+  OPEN
+  CLOSED
+  VOIDED
+}
+
+enum PaymentMethod {
+  CASH
+  MPESA
+  SPLIT
+}
+
+enum StockMovementType {
+  SALE
+  RESTOCK
+  WASTAGE
+  RECONCILIATION
+}
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  name         String
+  passwordHash String
+  role         Role
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shifts            Shift[]
+  openedTabs        Tab[]           @relation("TabOpenedBy")
+  addedOrderItems   OrderItem[]     @relation("OrderItemAddedBy")
+  voidedOrderItems  OrderItem[]     @relation("OrderItemVoidedBy")
+  processedPayments Payment[]       @relation("PaymentProcessedBy")
+  stockMovements    StockMovement[] @relation("StockMovementBy")
+  assignedTables    Table[]         @relation("AssignedWaiter")
+}
+
+model Shift {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  openingFloatCents Int     @default(0)
+  closingCashCents  Int?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments   Payment[]
+  tabsClosed Tab[]     @relation("TabClosedBy")
+
+  @@index([userId, startedAt])
+}
+
+model FloorPlan {
+  id       String  @id @default(cuid())
+  name     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tables Table[]
+}
+
+model Table {
+  id      String       @id @default(cuid())
+  label   String       @unique
+  section TableSection
+  status  TableStatus  @default(EMPTY)
+
+  floorPlanId String?
+  floorPlan   FloorPlan? @relation(fields: [floorPlanId], references: [id])
+
+  posX   Int @default(0)
+  posY   Int @default(0)
+  width  Int @default(1)
+  height Int @default(1)
+
+  openedAt DateTime?
+
+  assignedWaiterId String?
+  assignedWaiter   User?   @relation("AssignedWaiter", fields: [assignedWaiterId], references: [id])
+
+  currentTabId String? @unique
+  currentTab   Tab?    @relation("TableCurrentTab", fields: [currentTabId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tabs Tab[] @relation("TabTable")
+
+  @@index([section, label])
+}
+
+model Tab {
+  id     String    @id @default(cuid())
+  type   TabType
+  status TabStatus @default(OPEN)
+
+  tableId String?
+  table   Table?  @relation("TabTable", fields: [tableId], references: [id])
+
+  customerName String?
+
+  openedAt DateTime  @default(now())
+  closedAt DateTime?
+
+  openedById String
+  openedBy   User   @relation("TabOpenedBy", fields: [openedById], references: [id])
+
+  closedByShiftId String?
+  closedByShift   Shift?  @relation("TabClosedBy", fields: [closedByShiftId], references: [id])
+
+  serviceChargeEnabled Boolean @default(true)
+  serviceChargeRateBps Int     @default(1000)
+  vatRateBps           Int     @default(1600)
+  currency             String  @default("KES")
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems      OrderItem[]
+  payments        Payment[]
+  tableCurrentFor Table?          @relation("TableCurrentTab")
+  stockMovements  StockMovement[]
+
+  @@index([status, type, openedAt])
+  @@index([customerName])
+}
+
+model Category {
+  id           String @id @default(cuid())
+  name         String @unique
+  displayOrder Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  priceCents Int
+
+  isActive  Boolean @default(true)
+  is86d     Boolean @default(false)
+  isPopular Boolean @default(false)
+
+  stockQty     Int    @default(0)
+  stockUnit    String @default("unit")
+  reorderLevel Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems     OrderItem[]
+  stockMovements StockMovement[]
+
+  @@index([categoryId])
+}
+
+model OrderItem {
+  id String @id @default(cuid())
+
+  tabId String
+  tab   Tab    @relation(fields: [tabId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  qty             Int @default(1)
+  unitPriceCents  Int
+  totalPriceCents Int
+
+  addedById String
+  addedBy   User     @relation("OrderItemAddedBy", fields: [addedById], references: [id])
+  addedAt   DateTime @default(now())
+
+  voidedAt   DateTime?
+  voidReason String?
+  voidedById String?
+  voidedBy   User?     @relation("OrderItemVoidedBy", fields: [voidedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tabId, addedAt])
+  @@index([productId])
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  tabId String
+  tab   Tab    @relation(fields: [tabId], references: [id], onDelete: Cascade)
+
+  method      PaymentMethod
+  amountCents Int
+
+  mpesaPhone String?
+  mpesaRef   String?
+
+  processedById String
+  processedBy   User   @relation("PaymentProcessedBy", fields: [processedById], references: [id])
+
+  shiftId String?
+  shift   Shift?  @relation(fields: [shiftId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([tabId, createdAt])
+}
+
+model StockMovement {
+  id String @id @default(cuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  type     StockMovementType
+  qtyDelta Int
+  reason   String?
+
+  tabId String?
+  tab   Tab?    @relation(fields: [tabId], references: [id])
+
+  byId String
+  by   User   @relation("StockMovementBy", fields: [byId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@index([byId, createdAt])
+}

@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0f1e;
+  --foreground: #e8f0ff;
+  --muted: #94a3b8;
+  --panel: rgba(15, 23, 42, 0.75);
+  --panel-solid: #0b1226;
+  --border: rgba(148, 163, 184, 0.18);
+  --accent: #00d4ff;
+  --accent2: #7c3aed;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-app-sans);
+  --font-mono: var(--font-app-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0f1e;
+    --foreground: #e8f0ff;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.neon-ring {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent),
+    0 0 18px color-mix(in oklab, var(--accent) 18%, transparent);
+}
+
+.neon-text {
+  text-shadow: 0 0 18px color-mix(in oklab, var(--accent) 25%, transparent);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+}
