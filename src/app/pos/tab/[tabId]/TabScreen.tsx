@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { formatKes } from "@/lib/money";
@@ -14,6 +14,14 @@ type Product = {
   priceCents: number;
   is86d: boolean;
   isPopular: boolean;
+  stockQty: number;
+};
+
+type ReceiptData = {
+  tab: any;
+  totals: any;
+  payments: any[];
+  changeCents: number;
 };
 
 type Category = {
@@ -68,7 +76,7 @@ async function fetchJson(url: string, init?: RequestInit) {
 export function TabScreen({ tabId }: { tabId: string }) {
   const router = useRouter();
 
-  const [me, setMe] = useState<{ role: UserRole } | null>(null);
+  const [me, setMe] = useState<{ role: UserRole; name: string } | null>(null);
   const [tab, setTab] = useState<TabDto | null>(null);
   const [totals, setTotals] = useState<TotalsDto | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -81,6 +89,11 @@ export function TabScreen({ tabId }: { tabId: string }) {
   const [mpesaRef, setMpesaRef] = useState("");
   const [mpesaAmountKes, setMpesaAmountKes] = useState("");
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [_pendingUpdateCount, setPendingUpdateCount] = useState(0); // Trigger re-renders
+  const pendingUpdateIdsRef = useRef<Set<string>>(new Set());
+
   const canOverrideServiceCharge = me?.role === "ADMIN" || me?.role === "MANAGER";
   const canPay = me && me.role !== "WAITER";
 
@@ -99,7 +112,20 @@ export function TabScreen({ tabId }: { tabId: string }) {
       try {
         const json = await fetchJson(`/api/pos/tabs/${tabId}`, { cache: "no-store" });
         if (!mounted) return;
-        setTab(json.tab);
+
+        // Merge logic to prevent overwriting pending updates
+        setTab((prev) => {
+          if (!prev) return json.tab;
+          const mergedItems = json.tab.orderItems.map((newItem: any) => {
+            if (pendingUpdateIdsRef.current.has(newItem.id)) {
+              const existingItem = prev.orderItems.find((it) => it.id === newItem.id);
+              return existingItem || newItem;
+            }
+            return newItem;
+          });
+          return { ...json.tab, orderItems: mergedItems };
+        });
+
         setTotals(json.totals);
         setServiceChargeEnabled(json.tab.serviceChargeEnabled);
       } catch {
@@ -118,7 +144,7 @@ export function TabScreen({ tabId }: { tabId: string }) {
   }, [tabId]);
 
   useEffect(() => {
-    fetchJson("/api/pos/menu", { cache: "force-cache" })
+    fetchJson("/api/pos/menu", { cache: "no-store" })
       .then((j) => {
         setCategories(j.categories ?? []);
         setActiveCategoryId((j.categories?.[0]?.id as string) ?? null);
@@ -136,7 +162,23 @@ export function TabScreen({ tabId }: { tabId: string }) {
     [categories, activeCategoryId],
   );
 
-  const payableCents = totals?.totalCents ?? 0;
+  const optimisticTotals = useMemo(() => {
+    if (!tab) return totals;
+    const subtotalCents = tab.orderItems
+      .filter((it) => !it.voidedAt)
+      .reduce((sum, it) => sum + it.totalPriceCents, 0);
+
+    const serviceChargeCents = serviceChargeEnabled
+      ? Math.round((subtotalCents * (tab.serviceChargeRateBps || 1000)) / 10_000)
+      : 0;
+    const vatBase = subtotalCents + serviceChargeCents;
+    const vatCents = Math.round((vatBase * (tab.vatRateBps || 1600)) / 10_000);
+    const totalCents = subtotalCents + serviceChargeCents + vatCents;
+
+    return { subtotalCents, serviceChargeCents, vatCents, totalCents };
+  }, [tab, totals, serviceChargeEnabled]);
+
+  const payableCents = optimisticTotals?.totalCents ?? 0;
 
   async function addItem(product: Product) {
     if (!tab || tab.status !== "OPEN") return;
@@ -185,13 +227,19 @@ export function TabScreen({ tabId }: { tabId: string }) {
   async function updateQty(item: OrderItem, newQty: number) {
     if (!tab || tab.status !== "OPEN" || newQty < 1 || item._optimistic) return;
 
+    // Track this update as pending
+    pendingUpdateIdsRef.current.add(item.id);
+    setPendingUpdateCount((c) => c + 1);
+
     // Optimistic update
     setTab((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         orderItems: prev.orderItems.map((it) =>
-          it.id === item.id ? { ...it, qty: newQty, totalPriceCents: it.unitPriceCents * newQty } : it,
+          it.id === item.id
+            ? { ...it, qty: newQty, totalPriceCents: it.unitPriceCents * newQty }
+            : it,
         ),
       };
     });
@@ -203,22 +251,23 @@ export function TabScreen({ tabId }: { tabId: string }) {
         body: JSON.stringify({ qty: newQty }),
       });
     } catch {
-      // Revert on error (could be more sophisticated, but simple for now)
       router.refresh();
+    } finally {
+      // Clear pending after a short delay to let server state settle
+      setTimeout(() => {
+        pendingUpdateIdsRef.current.delete(item.id);
+        setPendingUpdateCount((c) => c + 1);
+      }, 3000);
     }
   }
 
   async function removeItem(item: OrderItem) {
     if (!tab || tab.status !== "OPEN" || item._optimistic) return;
-    if (!window.confirm(`Remove ${item.product.name}?`)) return;
+    if (!window.confirm("Remove this item?")) return;
 
-    // Optimistic update
     setTab((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        orderItems: prev.orderItems.filter((it) => it.id !== item.id),
-      };
+      return { ...prev, orderItems: prev.orderItems.filter((it) => it.id !== item.id) };
     });
 
     try {
@@ -241,47 +290,85 @@ export function TabScreen({ tabId }: { tabId: string }) {
   }
 
   function parseKesToCents(input: string) {
-    const clean = input.replace(/[^0-9]/g, "");
-    if (!clean) return 0;
-    const kes = Number(clean);
-    if (!Number.isFinite(kes)) return 0;
-    return kes * 100;
+    if (!input) return 0;
+    // Allow digits and a single decimal point
+    const clean = input.replace(/[^0-9.]/g, "");
+    const kes = parseFloat(clean);
+    if (isNaN(kes)) return 0;
+    return Math.round(kes * 100);
   }
 
   async function pay() {
-    if (!tab || tab.status !== "OPEN") return;
-    const payload: Record<string, unknown> = {
-      method: payMethod,
-    };
+    if (!tab || payableCents <= 0 || paying) return;
 
-    if (payMethod === "CASH") {
-      payload.cashReceivedCents = parseKesToCents(cashReceivedKes);
-    } else if (payMethod === "MPESA") {
-      payload.mpesaPhone = mpesaPhone.trim();
-      payload.mpesaRef = mpesaRef.trim() || undefined;
-    } else {
-      payload.mpesaPhone = mpesaPhone.trim();
-      payload.mpesaRef = mpesaRef.trim() || undefined;
-      payload.mpesaAmountCents = parseKesToCents(mpesaAmountKes);
-      payload.cashReceivedCents = parseKesToCents(cashReceivedKes);
+    const parsedCashReceived = parseKesToCents(cashReceivedKes);
+    const mpesaAmountCents = parseKesToCents(mpesaAmountKes);
+
+    // Frontend validation
+    if (payMethod === "CASH" && parsedCashReceived < payableCents) {
+      alert(`Insufficient cash! Need ${formatKes(payableCents)}`);
+      return;
+    }
+    if (payMethod === "SPLIT") {
+      const cashDue = payableCents - mpesaAmountCents;
+      if (parsedCashReceived < cashDue) {
+        alert(`Insufficient cash! Need ${formatKes(cashDue)} + M-Pesa ${formatKes(mpesaAmountCents)}`);
+        return;
+      }
     }
 
-    if (canOverrideServiceCharge) {
-      payload.serviceChargeEnabled = serviceChargeEnabled;
+    setPaying(true);
+    try {
+      const payload: Record<string, unknown> = {
+        method: payMethod,
+      };
+
+      if (payMethod === "CASH") {
+        payload.cashReceivedCents = parsedCashReceived;
+      } else if (payMethod === "MPESA") {
+        payload.mpesaPhone = mpesaPhone.trim();
+        payload.mpesaRef = mpesaRef.trim() || undefined;
+      } else {
+        payload.mpesaPhone = mpesaPhone.trim();
+        payload.mpesaRef = mpesaRef.trim() || undefined;
+        payload.mpesaAmountCents = mpesaAmountCents;
+        payload.cashReceivedCents = parsedCashReceived;
+      }
+
+      if (canOverrideServiceCharge) {
+        payload.serviceChargeEnabled = serviceChargeEnabled;
+      }
+
+      const json = await fetchJson(`/api/pos/tabs/${tab.id}/pay`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (json.ok) {
+        setReceipt({
+          tab,
+          totals: optimisticTotals,
+          payments: json.paymentIds || [],
+          changeCents: json.changeCents,
+        });
+
+        setTimeout(() => {
+          window.print();
+          router.push("/pos");
+          router.refresh();
+        }, 800);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setPaying(false);
     }
-
-    await fetchJson(`/api/pos/tabs/${tab.id}/pay`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    router.replace("/pos");
   }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-bold tracking-widest text-[color:var(--muted)] uppercase">TAB OVERVIEW</div>
           <h1 className="truncate text-2xl font-black text-white mt-1">{tabLabel}</h1>
@@ -293,7 +380,7 @@ export function TabScreen({ tabId }: { tabId: string }) {
         </div>
         <div className="flex items-center gap-3">
           <button
-            className="h-10 rounded-xl border border-[color:var(--border)] bg-black/20 px-4 text-xs font-bold uppercase tracking-wider hover:bg-black/30 transition-all"
+            className="h-10 w-full sm:w-auto rounded-xl border border-[color:var(--border)] bg-black/20 px-4 text-xs font-bold uppercase tracking-wider hover:bg-black/30 transition-all font-mono"
             onClick={() => router.push("/pos")}
           >
             ← Back
@@ -302,7 +389,7 @@ export function TabScreen({ tabId }: { tabId: string }) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
-        <section className="rounded-3xl border border-[color:var(--border)] bg-[#0a1226]/40 p-6 backdrop-blur-xl">
+        <section className="rounded-3xl border border-[color:var(--border)] bg-[#1e293b] p-6 shadow-xl">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-sm font-black uppercase tracking-widest text-white/90">Current Items</h2>
             <div className="text-[10px] font-bold text-[color:var(--muted)] uppercase">{loading ? "Syncing..." : "Live"}</div>
@@ -313,65 +400,61 @@ export function TabScreen({ tabId }: { tabId: string }) {
               tab.orderItems.map((it) => (
                 <div
                   key={it.id}
-                  className={`group relative overflow-hidden rounded-2xl border border-[color:var(--border)] bg-black/40 p-4 transition-all hover:bg-black/60 ${it.voidedAt ? "opacity-50 grayscale" : ""}`}
+                  className={`group relative overflow-hidden rounded-2xl border border-[color:var(--border)] bg-black/20 p-4 transition-all hover:bg-black/30 ${it.voidedAt ? "opacity-50 grayscale" : ""}`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
-                        <div className="truncate text-base font-bold text-white group-hover:text-[color:var(--accent)] transition-colors">
+                        <div className="truncate text-base font-bold text-white group-hover:text-[color:var(--primary)] transition-colors">
                           {it.product.name}
                         </div>
                         <button
                           className="text-[color:var(--muted)] hover:text-red-400 p-1 transition-colors"
                           onClick={() => it.voidedAt ? voidItem(it) : removeItem(it)}
-                          title={it.voidedAt ? "Voided" : "Remove item"}
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
                         </button>
                       </div>
-                      <div className="text-[10px] font-bold text-[color:var(--accent)] uppercase tracking-tight mt-0.5">
+                      <div className="mt-1 text-xs font-bold text-[color:var(--primary)] uppercase tracking-tight">
                         {formatKes(it.unitPriceCents)} each
                       </div>
-
-                      <div className="mt-4 flex items-center justify-between">
-                        <div className="flex items-center gap-1 bg-black/40 rounded-xl p-1 border border-white/5">
-                          <button
-                            className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors disabled:opacity-30"
-                            onClick={() => updateQty(it, it.qty - 1)}
-                            disabled={it.qty <= 1 || it.voidedAt}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                          </button>
-                          <span className="w-8 text-center text-sm font-bold text-white">{it.qty}</span>
-                          <button
-                            className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors disabled:opacity-30"
-                            onClick={() => updateQty(it, it.qty + 1)}
-                            disabled={it.voidedAt}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                          </button>
-                        </div>
-                        <div className="text-xl font-black text-white">
-                          {formatKes(it.totalPriceCents)}
-                        </div>
-                      </div>
-
-                      {it.voidedAt && (
-                        <div className="mt-2 text-[10px] font-bold text-red-400 uppercase bg-red-400/10 px-2 py-1 rounded-lg inline-block">
-                          VOIDED: {it.voidReason}
-                        </div>
-                      )}
                     </div>
                   </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 rounded-xl bg-black/20 p-1">
+                      <button
+                        className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-black/30 text-white disabled:opacity-20"
+                        disabled={it.qty <= 1 || !!it.voidedAt || tab?.status !== "OPEN"}
+                        onClick={() => updateQty(it, it.qty - 1)}
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center text-sm font-black text-white">{it.qty}</span>
+                      <button
+                        className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-black/30 text-white disabled:opacity-20"
+                        disabled={!!it.voidedAt || tab?.status !== "OPEN"}
+                        onClick={() => updateQty(it, it.qty + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-base font-black text-white">{formatKes(it.totalPriceCents)}</div>
+                    </div>
+                  </div>
+
+                  {it.voidedAt && (
+                    <div className="mt-2 text-[10px] font-bold text-red-400 uppercase tracking-widest bg-red-500/10 p-2 rounded-lg border border-red-500/20">
+                      VOIDED: {it.voidReason || "Administrative removal"}
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center rounded-3xl border border-dashed border-[color:var(--border)] bg-black/20">
-                <div className="text-white/20 mb-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="21" r="1" /><circle cx="19" cy="21" r="1" /><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" /></svg>
-                </div>
-                <div className="text-sm font-bold text-[color:var(--muted)] uppercase tracking-widest">No items added yet</div>
-                <div className="text-xs text-white/40 mt-1">Tap products in the menu to build this tab.</div>
+              <div className="flex flex-col items-center justify-center py-20 text-center opacity-20">
+                <svg className="mb-4" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
+                <div className="text-xs font-black uppercase tracking-widest">Tab is empty</div>
               </div>
             )}
           </div>
@@ -381,22 +464,22 @@ export function TabScreen({ tabId }: { tabId: string }) {
           <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--panel)] p-4 backdrop-blur">
             <div className="mb-3 text-sm font-semibold">Totals</div>
             <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between text-[color:var(--muted)]">
+              <div className="flex items-center justify-between text-xs text-[color:var(--muted)]">
                 <span>Subtotal</span>
                 <span className="text-[color:var(--foreground)]">
-                  {formatKes(totals?.subtotalCents ?? 0)}
+                  {formatKes(optimisticTotals?.subtotalCents ?? 0)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-[color:var(--muted)]">
-                <span>Service (10%)</span>
+                <span>Service ({((tab?.serviceChargeRateBps ?? 1000) / 100).toFixed(0)}%)</span>
                 <span className="text-[color:var(--foreground)]">
-                  {formatKes(totals?.serviceChargeCents ?? 0)}
+                  {formatKes(optimisticTotals?.serviceChargeCents ?? 0)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-[color:var(--muted)]">
-                <span>VAT (16%)</span>
+                <span>VAT ({((tab?.vatRateBps ?? 1600) / 100).toFixed(0)}%)</span>
                 <span className="text-[color:var(--foreground)]">
-                  {formatKes(totals?.vatCents ?? 0)}
+                  {formatKes(optimisticTotals?.vatCents ?? 0)}
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-[color:var(--border)] pt-2">
@@ -426,7 +509,7 @@ export function TabScreen({ tabId }: { tabId: string }) {
                   <button
                     key={m}
                     className={`h-11 rounded-xl border px-3 text-xs font-semibold ${payMethod === m
-                      ? "border-[color:var(--accent)] bg-[color:var(--accent)] text-black"
+                      ? "border-[color:var(--primary)] bg-[color:var(--primary)] text-white shadow-lg shadow-[color:var(--primary)]/20"
                       : "border-[color:var(--border)] bg-black/20 hover:bg-black/30"
                       }`}
                     onClick={() => setPayMethod(m)}
@@ -435,6 +518,13 @@ export function TabScreen({ tabId }: { tabId: string }) {
                   </button>
                 ))}
               </div>
+
+              {payMethod === "SPLIT" && (
+                <div className="mt-4 rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
+                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Split Strategy</div>
+                  <div className="text-[10px] text-blue-300/60 leading-tight">Enter the M-Pesa portion below; the remaining balance will be treated as Cash.</div>
+                </div>
+              )}
 
               <div className="mt-3 space-y-2">
                 {payMethod !== "CASH" ? (
@@ -476,7 +566,7 @@ export function TabScreen({ tabId }: { tabId: string }) {
                 ) : null}
 
                 <button
-                  className="h-12 w-full rounded-xl bg-[color:var(--accent2)] text-sm font-semibold hover:brightness-110 disabled:opacity-50"
+                  className="h-12 w-full rounded-xl bg-[color:var(--primary)] text-sm font-black uppercase tracking-widest text-white hover:brightness-110 shadow-lg shadow-[color:var(--primary)]/20 disabled:opacity-50"
                   disabled={!tab || tab.status !== "OPEN" || payableCents <= 0}
                   onClick={pay}
                 >
@@ -484,7 +574,7 @@ export function TabScreen({ tabId }: { tabId: string }) {
                 </button>
 
                 <div className="text-xs text-[color:var(--muted)]">
-                  M-Pesa STK Push integration can be added later; this MVP records the payment.
+                  M-Pesa STK Push integration can be added later; this records the payment.
                 </div>
               </div>
             </section>
@@ -513,8 +603,8 @@ export function TabScreen({ tabId }: { tabId: string }) {
               {categories.map((c) => (
                 <button
                   key={c.id}
-                  className={`h-9 rounded-xl border px-3 text-xs ${c.id === activeCategoryId
-                    ? "border-[color:var(--accent)] bg-[color:var(--accent)] text-black"
+                  className={`h-9 rounded-xl border px-3 text-[10px] font-black uppercase tracking-widest transition-all ${c.id === activeCategoryId
+                    ? "border-[color:var(--primary)] bg-[color:var(--primary)] text-white shadow-lg shadow-[color:var(--primary)]/20"
                     : "border-[color:var(--border)] bg-black/20 hover:bg-black/30"
                     }`}
                   onClick={() => setActiveCategoryId(c.id)}
@@ -528,19 +618,105 @@ export function TabScreen({ tabId }: { tabId: string }) {
               {(activeCategory?.products ?? []).map((p) => (
                 <button
                   key={p.id}
-                  className="min-h-[56px] rounded-2xl border border-[color:var(--border)] bg-black/20 p-3 text-left hover:bg-black/30 disabled:opacity-50"
-                  disabled={p.is86d || tab?.status !== "OPEN"}
+                  className={`min-h-[64px] rounded-2xl border p-3 text-left transition-all ${p.stockQty <= 0 || p.is86d ? 'bg-red-500/10 border-red-500/20 opacity-60 cursor-not-allowed' : 'bg-black/10 border-[color:var(--border)] hover:bg-black/20 hover:border-[color:var(--primary)]/30'}`}
+                  disabled={p.is86d || p.stockQty <= 0 || tab?.status !== "OPEN"}
                   onClick={() => addItem(p)}
                 >
-                  <div className="truncate text-sm font-semibold">{p.name}</div>
-                  <div className="text-xs text-[color:var(--muted)]">{formatKes(p.priceCents)}</div>
+                  <div className="flex justify-between items-start gap-1">
+                    <div className="truncate text-sm font-bold text-white leading-tight">{p.name}</div>
+                    {p.stockQty <= 5 && p.stockQty > 0 && (
+                      <span className="text-[8px] font-black bg-yellow-500/20 text-yellow-500 px-1 rounded shrink-0">LOW</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="text-[10px] font-bold text-[color:var(--primary)] tracking-tight">{formatKes(p.priceCents)}</div>
+                    <div className={`text-[9px] font-black uppercase ${p.stockQty <= 0 ? 'text-red-500' : 'text-[color:var(--muted)]'}`}>
+                      {p.stockQty <= 0 ? 'OUT' : `${p.stockQty} left`}
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>
           </section>
         </aside>
       </div>
+
+      {/* Hidden Print Receipt Section */}
+      {receipt && (
+        <div className="fixed inset-0 z-[100] bg-white text-black p-8 print:block hidden overflow-y-auto">
+          <div className="max-w-[300px] mx-auto text-center font-mono text-sm">
+            <h1 className="text-xl font-bold uppercase mb-1">Club Liquor POS</h1>
+            <p className="mb-1 text-xs">Nairobi, Kenya</p>
+            <p className="mb-4 text-[10px]">Digital Receipt</p>
+
+            <div className="border-t border-dashed border-black my-4" />
+
+            <div className="text-left space-y-1 mb-4">
+              <div className="flex justify-between">
+                <span>Tab:</span>
+                <span className="font-bold">{tabLabel}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Server:</span>
+                <span>{me?.name || "Staff"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Date:</span>
+                <span>{new Date().toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="border-t border-dashed border-black my-4" />
+
+            <div className="space-y-2 mb-4">
+              {(receipt.tab?.orderItems ?? []).map((it: any) => (
+                <div key={it.id} className="flex justify-between items-start text-xs">
+                  <div className="text-left w-3/4">
+                    <div className="truncate">{it.product.name}</div>
+                    <div className="text-[10px] opacity-60">{it.qty} x {formatKes(it.unitPriceCents)}</div>
+                  </div>
+                  <div className="font-bold shrink-0">{formatKes(it.totalPriceCents)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-dashed border-black my-4" />
+
+            <div className="space-y-1 text-right">
+              <div className="flex justify-between font-bold">
+                <span>Subtotal:</span>
+                <span>{formatKes(receipt.totals.subtotalCents)}</span>
+              </div>
+              {receipt.totals.serviceChargeCents > 0 && (
+                <div className="flex justify-between">
+                  <span>Service Chg:</span>
+                  <span>{formatKes(receipt.totals.serviceChargeCents)}</span>
+                </div>
+              )}
+              {receipt.totals.vatCents > 0 && (
+                <div className="flex justify-between">
+                  <span>VAT (16%):</span>
+                  <span>{formatKes(receipt.totals.vatCents)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-black text-base pt-2">
+                <span>TOTAL:</span>
+                <span>{formatKes(receipt.totals.totalCents)}</span>
+              </div>
+            </div>
+
+            <div className="border-t border-dashed border-black my-4" />
+
+            <div className="text-left text-xs mb-8">
+              <p className="font-bold uppercase mb-1">Payment Method: {payMethod}</p>
+              {receipt.changeCents > 0 && <p className="font-bold underline">Change Due: {formatKes(receipt.changeCents)}</p>}
+            </div>
+
+            <p className="text-[10px] font-bold">Thank you for visiting Club Liquor!</p>
+            <p className="text-[8px] opacity-60 mt-1 italic">Software by JohnBrandews</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

@@ -4,8 +4,8 @@ export function formatKes(cents: number) {
     style: "currency",
     currency: "KES",
     currencyDisplay: "code",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
   // Ensure "KES 1,200" style (space after code)
   return formatted.replace("KES", "KES").replace(/\u00A0/g, " ");

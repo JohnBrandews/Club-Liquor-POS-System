@@ -55,8 +55,10 @@ model User {
   id           String  @id @default(cuid())
   email        String  @unique
   name         String
-  passwordHash String
-  role         Role
+  passwordHash  String?
+  inviteToken   String?  @unique
+  inviteExpires DateTime?
+  role          Role
   isActive     Boolean @default(true)
 
   createdAt DateTime @default(now())

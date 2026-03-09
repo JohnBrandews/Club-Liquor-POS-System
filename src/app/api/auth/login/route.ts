@@ -20,8 +20,14 @@ export async function POST(req: Request) {
     where: { email: body.data.email },
   });
 
-  if (!user || !user.isActive) {
+  if (!user) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  }
+
+  if (!user.isActive) {
+    return NextResponse.json({
+      error: "unable to log in since their is a problem with your account or it might be suspended please contact with your admin"
+    }, { status: 403 });
   }
 
   const ok = await verifyPassword(body.data.password, user.passwordHash);

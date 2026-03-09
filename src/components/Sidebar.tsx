@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/app/pos/LogoutButton";
@@ -33,18 +34,6 @@ const NAV_ITEMS: NavItem[] = [
         <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
       </svg>
     ),
-  },
-  {
-    href: "/pos/tab/quick", // Placeholder for quick sale logic if handled via route
-    label: "Quick Sale",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-        <circle cx="9" cy="21" r="1" />
-        <circle cx="20" cy="21" r="1" />
-        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-      </svg>
-    ),
-    roles: ["ADMIN", "MANAGER", "BARTENDER"],
   },
   {
     href: "/inventory",
@@ -98,63 +87,101 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar({ user }: { user: { name: string; role: string } | null }) {
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
 
   if (!user) return null;
 
   return (
-    <aside className="fixed left-0 top-0 flex h-dvh w-64 flex-col border-r border-[color:var(--border)] bg-[#050810] p-4">
-      <div className="mb-8 px-2">
-        <h1 className="neon-text text-xl font-bold tracking-tight text-[color:var(--accent)]">
-          Club POS
-        </h1>
-        <p className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]">
-          Nightlife System
-        </p>
-      </div>
+    <>
+      {/* Mobile Toggle Button */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#050810]/80 text-[color:var(--accent)] backdrop-blur-xl md:hidden"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-5 w-5">
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+      )}
 
-      <nav className="flex-1 space-y-1.5 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
-          if (item.roles && !item.roles.includes(user.role)) return null;
+      {/* Backdrop */}
+      {isOpen && (
+        <div
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+        />
+      )}
 
-          const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+      <aside
+        className={`fixed left-0 top-0 z-50 flex h-dvh w-64 flex-col border-r border-[color:var(--border)] bg-[#0f172a] p-4 transition-transform duration-300 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+      >
+        <div className="mb-8 flex items-center justify-between px-2">
+          <div>
+            <h1 className="neon-text text-xl font-bold tracking-tight text-[color:var(--primary)]">
+              Club POS
+            </h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]">
+              Nightlife System
+            </p>
+          </div>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--muted)] hover:bg-white/5 md:hidden"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-5 w-5">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                isActive
-                  ? "bg-[linear-gradient(45deg,rgba(0,212,255,0.15),rgba(124,58,237,0.1))] text-[color:var(--foreground)] ring-1 ring-[color:var(--accent)]/30"
+        <nav className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar">
+          {NAV_ITEMS.map((item) => {
+            if (item.roles && !item.roles.includes(user.role)) return null;
+
+            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${isActive
+                  ? "bg-[color:var(--primary)]/15 text-[color:var(--primary)] ring-1 ring-[color:var(--primary)]/30"
                   : "text-[color:var(--muted)] hover:bg-white/5 hover:text-[color:var(--foreground)]"
-              }`}
-            >
-              <span className={`transition-colors ${isActive ? "text-[color:var(--accent)]" : "group-hover:text-[color:var(--accent)]"}`}>
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+                  }`}
+              >
+                <span className={`transition-colors ${isActive ? "text-[color:var(--primary)]" : "group-hover:text-[color:var(--primary)]"}`}>
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
 
-      <div className="mt-auto pt-4">
-        <div className="mb-4 rounded-2xl bg-[#0a1226] p-4 ring-1 ring-[color:var(--border)]">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--accent2)] text-sm font-bold text-white">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{user.name}</p>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
-                {user.role}
-              </p>
+        <div className="mt-auto pt-4">
+          <div className="mb-4 rounded-2xl bg-[#1e293b] p-4 border border-[color:var(--border)]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--primary)] text-sm font-bold text-white">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{user.name}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
+                  {user.role}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="overflow-hidden rounded-xl bg-red-500/10 transition-colors hover:bg-red-500/20">
+          <div className="overflow-hidden rounded-xl bg-red-500/10 transition-colors hover:bg-red-500/20">
             <LogoutButton />
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

@@ -96,7 +96,7 @@ export function PosHomeClient({ role }: { role: UserRole }) {
 
   return (
     <main className="mx-auto grid max-w-6xl grid-cols-1 gap-4 px-4 py-6 lg:grid-cols-[1fr_360px]">
-      <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--panel)] p-4 backdrop-blur neon-ring">
+      <section className="rounded-3xl border border-[color:var(--border)] bg-[#1e293b] p-6 shadow-xl">
         <div className="mb-4">
           <h1 className="text-lg font-semibold">Start an order</h1>
           <p className="text-sm text-[color:var(--muted)]">
@@ -106,28 +106,28 @@ export function PosHomeClient({ role }: { role: UserRole }) {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <button
-            className="h-14 rounded-2xl border border-[color:var(--border)] bg-black/20 text-left px-4 hover:bg-black/30"
+            className="h-14 rounded-2xl border border-[color:var(--border)] bg-black/10 text-left px-4 hover:bg-black/20 hover:border-[color:var(--primary)]/30 transition-all"
             onClick={() => router.push("/pos/floor")}
           >
-            <div className="text-sm font-semibold">Table Tab</div>
+            <div className="text-sm font-bold text-white">Table Tab</div>
             <div className="text-xs text-[color:var(--muted)]">Pick a table from floor plan</div>
           </button>
 
           {!isWaiter && (
             <>
               <button
-                className="h-14 rounded-2xl border border-[color:var(--accent)]/60 bg-[color:var(--accent)] text-left px-4 text-black hover:brightness-110"
+                className="h-14 rounded-2xl border border-[color:var(--primary)] bg-[color:var(--primary)] text-left px-4 text-white hover:brightness-110 shadow-lg shadow-[color:var(--primary)]/20 transition-all"
                 onClick={() => startQuickSale()}
               >
-                <div className="text-sm font-semibold">Quick Sale</div>
-                <div className="text-xs/4 opacity-80">Fastest workflow</div>
+                <div className="text-sm font-black uppercase tracking-wider">Quick Sale</div>
+                <div className="text-[10px] font-bold opacity-80 uppercase tracking-tighter">Fastest workflow</div>
               </button>
 
               <button
-                className="h-14 rounded-2xl border border-[color:var(--border)] bg-black/20 text-left px-4 hover:bg-black/30"
+                className="h-14 rounded-2xl border border-[color:var(--border)] bg-black/10 text-left px-4 hover:bg-black/20 hover:border-[color:var(--primary)]/30 transition-all"
                 onClick={() => setNamedOpen(true)}
               >
-                <div className="text-sm font-semibold">Named Tab</div>
+                <div className="text-sm font-bold text-white">Named Tab</div>
                 <div className="text-xs text-[color:var(--muted)]">Open by customer name</div>
               </button>
             </>
@@ -135,7 +135,7 @@ export function PosHomeClient({ role }: { role: UserRole }) {
         </div>
 
         {!isWaiter && namedOpen ? (
-          <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-black/20 p-4">
+          <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-black/10 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold">New named tab</div>
@@ -154,13 +154,13 @@ export function PosHomeClient({ role }: { role: UserRole }) {
 
             <div className="mt-3 flex flex-col gap-3 sm:flex-row">
               <input
-                className="h-12 flex-1 rounded-xl border border-[color:var(--border)] bg-[color:var(--panel-solid)] px-4 text-base outline-none focus:border-[color:var(--accent)]"
+                className="h-12 flex-1 rounded-xl border border-[color:var(--border)] bg-[#1e293b] px-4 text-base outline-none focus:border-[color:var(--primary)]/50 transition-all"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Customer name"
               />
               <button
-                className="h-12 rounded-xl bg-[color:var(--accent2)] px-5 text-sm font-semibold hover:brightness-110 disabled:opacity-50"
+                className="h-12 rounded-xl bg-[color:var(--primary)] px-5 text-[10px] font-black uppercase tracking-widest text-white hover:brightness-110 shadow-lg shadow-[color:var(--primary)]/20 disabled:opacity-50"
                 disabled={!canCreateNamed}
                 onClick={async () => {
                   const tabId = await createTab({
@@ -177,7 +177,7 @@ export function PosHomeClient({ role }: { role: UserRole }) {
         ) : null}
       </section>
 
-      <aside className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--panel)] p-4 backdrop-blur">
+      <aside className="rounded-3xl border border-[color:var(--border)] bg-[#1e293b] p-6 shadow-xl">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">Open tabs</div>
@@ -203,7 +203,7 @@ export function PosHomeClient({ role }: { role: UserRole }) {
             tabs.map((t) => (
               <button
                 key={t.id}
-                className="w-full rounded-2xl border border-[color:var(--border)] bg-black/20 p-4 text-left hover:bg-black/30"
+                className="w-full rounded-2xl border border-[color:var(--border)] bg-black/10 p-4 text-left transition-all hover:bg-black/20 hover:border-[color:var(--primary)]/30"
                 onClick={() => router.push(`/pos/tab/${t.id}`)}
               >
                 <div className="flex items-center justify-between gap-3">

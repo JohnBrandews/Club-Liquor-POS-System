@@ -3,9 +3,16 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { getSession } from "@/lib/auth/server";
+import { cn } from "@/lib/utils";
 
 const inter = Inter({
   variable: "--font-app-sans",
+  subsets: ["latin"],
+});
+
+// Use Inter as a replacement for Geist to fix the "Unknown font" error
+const geist = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
@@ -19,6 +26,8 @@ export const metadata: Metadata = {
   description: "Club & Liquor POS System",
 };
 
+import { AppLayoutContent } from "@/components/AppLayoutContent";
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -27,22 +36,13 @@ export default async function RootLayout({
   const session = await getSession();
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={cn("dark", "font-sans", geist.variable)}>
       <body
         className={`${inter.variable} ${mono.variable} antialiased min-h-dvh bg-[color:var(--background)] text-[color:var(--foreground)]`}
       >
-        {session ? (
-          <div className="flex">
-            <Sidebar user={session} />
-            <main className="ml-64 min-h-dvh flex-1 overflow-x-hidden">
-              <div className="p-1">
-                {children}
-              </div>
-            </main>
-          </div>
-        ) : (
-          children
-        )}
+        <AppLayoutContent session={session}>
+          {children}
+        </AppLayoutContent>
       </body>
     </html>
   );
