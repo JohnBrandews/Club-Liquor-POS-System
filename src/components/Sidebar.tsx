@@ -97,9 +97,9 @@ export function Sidebar({ user }: { user: { name: string; role: string } | null 
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#050810]/80 text-[color:var(--accent)] backdrop-blur-xl md:hidden"
+          className="fixed right-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[#1e293b]/80 text-white backdrop-blur-xl shadow-2xl md:hidden"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-5 w-5">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-6 w-6">
             <line x1="3" y1="12" x2="21" y2="12" />
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="3" y1="18" x2="21" y2="18" />

@@ -24,7 +24,7 @@ export function AppLayoutContent({
     return (
         <div className="flex">
             <Sidebar user={session} />
-            <main className="min-h-dvh flex-1 overflow-x-hidden md:ml-64">
+            <main className="min-h-dvh flex-1 overflow-x-hidden md:ml-64 pt-20 md:pt-0">
                 <div className="p-1">
                     {children}
                 </div>

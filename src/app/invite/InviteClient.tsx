@@ -59,7 +59,10 @@ export default function InviteClient() {
             const data = await res.json();
             if (res.ok) {
                 setSuccess(true);
-                setTimeout(() => router.push("/pos"), 3000);
+                setTimeout(() => {
+                    router.refresh();
+                    router.push("/pos");
+                }, 3000);
             } else {
                 alert(data.error || "Failed to activate account.");
             }

@@ -252,7 +252,7 @@ export function InventoryPageClient({
                                                 </div>
                                             </div>
 
-                                            <div className="mt-6 flex gap-2 opacity-0 transition-all duration-300 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0">
+                                            <div className="mt-6 flex gap-2 sm:opacity-0 transition-all duration-300 sm:group-hover:opacity-100 sm:translate-y-2 sm:group-hover:translate-y-0">
                                                 <button
                                                     onClick={() => setRestockProduct(p)}
                                                     className="h-9 flex-1 rounded-xl bg-[color:var(--primary)] text-[10px] font-black uppercase tracking-widest text-white hover:brightness-110 shadow-lg shadow-[color:var(--primary)]/20"
@@ -354,8 +354,8 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
                 "border-[color:var(--border)] bg-[#1e293b] text-white";
     return (
         <div className={`rounded-3xl border p-5 ${accentClass}`}>
-            <div className={`text-[9px] font-black uppercase tracking-widest mb-2 ${tone ? 'opacity-80' : 'text-[color:var(--muted)]'}`}>{label}</div>
-            <div className="text-xl font-black">{value}</div>
+            <div className={`text-[9px] font-black uppercase tracking-widest mb-1 ${tone ? 'opacity-80' : 'text-[color:var(--muted)]'}`}>{label}</div>
+            <div className="text-lg sm:text-xl font-black truncate">{value}</div>
         </div>
     );
 }
