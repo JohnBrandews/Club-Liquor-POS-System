@@ -60,8 +60,7 @@ export default function InviteClient() {
             if (res.ok) {
                 setSuccess(true);
                 setTimeout(() => {
-                    router.refresh();
-                    router.push("/pos");
+                    window.location.href = "/pos";
                 }, 3000);
             } else {
                 alert(data.error || "Failed to activate account.");

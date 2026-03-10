@@ -143,8 +143,7 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
     // The `else { r.replace(nextPath || "/pos") }` suggests the original logic is still needed.
     //
     // This is the most faithful way to incorporate the snippet while maintaining syntax:
-    router.refresh();
-    router.replace(nextPath || "/pos");
+    window.location.href = nextPath || "/pos";
   }
 
   async function onForgotSubmit(e: React.FormEvent) {
