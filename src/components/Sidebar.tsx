@@ -122,7 +122,7 @@ export function Sidebar({ user }: { user: { name: string; role: string } | null 
         <div className="mb-8 flex items-center justify-between px-2">
           <div>
             <h1 className="neon-text text-xl font-bold tracking-tight text-[color:var(--primary)]">
-              Club POS
+              Club Liquor POS
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]">
               Nightlife System
@@ -167,7 +167,7 @@ export function Sidebar({ user }: { user: { name: string; role: string } | null 
           <div className="mb-4 rounded-2xl bg-[#1e293b] p-4 border border-[color:var(--border)]">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--primary)] text-sm font-bold text-white">
-                {user.name.charAt(0).toUpperCase()}
+                <img src="/logo.png" alt="Logo" className="h-6 w-6 object-contain" />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{user.name}</p>

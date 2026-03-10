@@ -13,8 +13,8 @@ type LoginState =
 export function LoginForm({ nextPath }: { nextPath: string }) {
   const router = useRouter();
 
-  const [email, setEmail] = useState("admin@club.com");
-  const [password, setPassword] = useState("Admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [state, setState] = useState<LoginState>({ status: "idle" });
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -84,10 +84,10 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
       </div>
       <div className="relative z-10 mx-auto w-full max-w-md rounded-3xl border border-white/10 bg-[color:var(--panel)] p-8 backdrop-blur-2xl shadow-[0_0_40px_rgba(59,130,246,0.15)]">
         <div className="mb-8 text-center sm:text-left">
-          <div className="text-xs font-black tracking-[0.3em] text-[color:var(--primary)] uppercase">
-            EST. 2026
+          <div className="flex justify-center mb-6">
+            <img src="/logo.png" alt="Club Liquor POS" className="h-20 w-auto object-contain" />
           </div>
-          <h1 className="neon-text mt-2 text-3xl font-black text-white uppercase tracking-tight">NeonPOS</h1>
+          <h1 className="neon-text mt-2 text-3xl font-black text-white uppercase tracking-tight text-center">Club Liquor POS</h1>
           <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
             Sign in to start taking orders.
           </p>

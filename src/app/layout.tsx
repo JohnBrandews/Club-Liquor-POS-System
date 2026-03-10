@@ -22,8 +22,11 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NeonPOS",
-  description: "Club & Liquor POS System",
+  title: "Club Liquor POS System",
+  description: "Advanced POS System for Clubs & Liquor Stores",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 import { AppLayoutContent } from "@/components/AppLayoutContent";
