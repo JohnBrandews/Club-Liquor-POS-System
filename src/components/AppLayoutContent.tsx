@@ -14,7 +14,7 @@ export function AppLayoutContent({
     const pathname = usePathname();
 
     // Pages that should NEVER show the sidebar even if logged in
-    const isPublicPage = pathname === "/login" || pathname === "/invite";
+    const isPublicPage = pathname.startsWith("/login") || pathname.startsWith("/invite");
 
     // If no session or it's a public page, show plain children
     if (!session || isPublicPage) {

@@ -59,7 +59,7 @@ export default function InviteClient() {
             const data = await res.json();
             if (res.ok) {
                 setSuccess(true);
-                setTimeout(() => router.push("/login"), 3000);
+                setTimeout(() => router.push("/pos"), 3000);
             } else {
                 alert(data.error || "Failed to activate account.");
             }
@@ -99,7 +99,7 @@ export default function InviteClient() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-400 relative z-10"><polyline points="20 6 9 17 4 12" /></svg>
                 </div>
                 <h1 className="text-2xl font-black text-white uppercase tracking-[0.3em] mb-4">Account Ready!</h1>
-                <p className="text-sm text-white/40 max-w-xs">Template activated. Redirecting you to login...</p>
+                <p className="text-sm text-white/40 max-w-xs">Template activated. Redirecting you to your dashboard...</p>
             </div>
         );
     }

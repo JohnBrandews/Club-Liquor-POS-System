@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
 import { z } from "zod";
+import { signSessionJwt, SESSION_COOKIE_NAME } from "@/lib/auth/jwt";
 
 const InviteSubmitSchema = z.object({
     token: z.string(),
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
 
     const passwordHash = await hashPassword(body.data.password);
 
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
         where: { id: user.id },
         data: {
             passwordHash,
@@ -64,5 +65,22 @@ export async function POST(req: Request) {
         },
     });
 
-    return NextResponse.json({ ok: true });
+    // Auto-login after activation
+    const token = await signSessionJwt({
+        sub: updatedUser.id,
+        role: updatedUser.role,
+        name: updatedUser.name,
+        email: updatedUser.email,
+    });
+
+    const response = NextResponse.json({ ok: true });
+    response.cookies.set(SESSION_COOKIE_NAME, token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 12, // 12 hours
+    });
+
+    return response;
 }
