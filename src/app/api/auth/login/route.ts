@@ -30,6 +30,12 @@ export async function POST(req: Request) {
     }, { status: 403 });
   }
 
+  if (!user.passwordHash) {
+    return NextResponse.json({
+      error: "Your account is not yet activated. Please check your email for the invitation link."
+    }, { status: 401 });
+  }
+
   const ok = await verifyPassword(body.data.password, user.passwordHash);
   if (!ok) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
