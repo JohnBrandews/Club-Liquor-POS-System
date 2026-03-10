@@ -16,52 +16,61 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: body.data.email },
-  });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: body.data.email },
+    });
 
-  if (!user) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    console.log("Login attempt for:", body.data.email, "User found:", !!user);
+
+    if (!user) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    if (!user.isActive) {
+      return NextResponse.json({
+        error: "unable to log in since their is a problem with your account or it might be suspended please contact with your admin"
+      }, { status: 403 });
+    }
+
+    if (!user.passwordHash) {
+      return NextResponse.json({
+        error: "Your account is not yet activated. Please check your email for the invitation link."
+      }, { status: 401 });
+    }
+
+    const ok = await verifyPassword(body.data.password, user.passwordHash);
+    console.log("Password verification:", ok);
+
+    if (!ok) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    const token = await signSessionJwt({
+      sub: user.id,
+      role: user.role,
+      name: user.name,
+      email: user.email,
+    });
+    console.log("JWT signed successfully");
+
+    const res = NextResponse.json({
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    });
+
+    res.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: token,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+
+    return res;
+  } catch (err: any) {
+    console.error("Login route error:", err);
+    return NextResponse.json({ error: "Internal server error during login" }, { status: 500 });
   }
-
-  if (!user.isActive) {
-    return NextResponse.json({
-      error: "unable to log in since their is a problem with your account or it might be suspended please contact with your admin"
-    }, { status: 403 });
-  }
-
-  if (!user.passwordHash) {
-    return NextResponse.json({
-      error: "Your account is not yet activated. Please check your email for the invitation link."
-    }, { status: 401 });
-  }
-
-  const ok = await verifyPassword(body.data.password, user.passwordHash);
-  if (!ok) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-  }
-
-  const token = await signSessionJwt({
-    sub: user.id,
-    role: user.role,
-    name: user.name,
-    email: user.email,
-  });
-
-  const res = NextResponse.json({
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
-  });
-
-  res.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: token,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 12,
-  });
-
-  return res;
 }
-
