@@ -355,7 +355,7 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
     return (
         <div className={`rounded-3xl border p-5 ${accentClass}`}>
             <div className={`text-[9px] font-black uppercase tracking-widest mb-1 ${tone ? 'opacity-80' : 'text-[color:var(--muted)]'}`}>{label}</div>
-            <div className="text-lg sm:text-xl font-black truncate">{value}</div>
+            <div className="text-lg sm:text-xl font-black break-words leading-tight">{value}</div>
         </div>
     );
 }
