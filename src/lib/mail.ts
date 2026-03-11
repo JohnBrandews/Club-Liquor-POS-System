@@ -163,3 +163,38 @@ export async function sendPasswordResetEmail({
 
   return transporter.sendMail(mailOptions);
 }
+export async function sendTerminationEmail({
+  email,
+  name,
+}: {
+  email: string;
+  name: string;
+}) {
+  if (!isSmtpConfigured()) {
+    throw new Error("SMTP is not configured. Please check your .env file.");
+  }
+
+  const dateStr = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const mailOptions = {
+    from: process.env.SMTP_FROM || '"Club POS" <vibzenight@gmail.com>',
+    to: email,
+    subject: "Notice of Termination",
+    text: `Dear ${name},\n\nI am writing to formally inform you that your employment with Club Liquor POS is terminated, effective ${dateStr}. This decision follows restructuring for any inquiry please contact admin vibzenight@gmail.com\n\nBest regards,\nClub Management`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #ef4444;">Notice of Termination</h2>
+        <p>Dear <strong>${name}</strong>,</p>
+        <p>I am writing to formally inform you that your employment with <strong>Club Liquor POS</strong> is terminated, effective <strong>${dateStr}</strong>.</p>
+        <p>This decision follows restructuring. For any inquiry, please contact admin at <a href="mailto:vibzenight@gmail.com">vibzenight@gmail.com</a>.</p>
+        <p style="margin-top: 30px;">Best regards,<br>Club Management</p>
+      </div>
+    `,
+  };
+
+  return transporter.sendMail(mailOptions);
+}
