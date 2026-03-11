@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireApiSession } from "@/lib/auth/api";
-import { sendTerminationEmail } from "@/lib/mail";
+import { sendTerminationEmail, sendReinstatementEmail } from "@/lib/mail";
 
 export async function POST(
     req: Request,
@@ -21,23 +21,35 @@ export async function POST(
     }
 
     const newStatus = !user.isActive;
+    const inviteToken = newStatus ? Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) : undefined;
+    const inviteExpires = newStatus ? new Date(Date.now() + 24 * 60 * 60 * 1000) : undefined;
 
     const updated = await prisma.user.update({
         where: { id: user.id },
-        data: { isActive: newStatus },
-        select: { id: true, isActive: true, email: true, name: true },
+        data: { 
+            isActive: newStatus,
+            inviteToken: newStatus ? inviteToken : null,
+            inviteExpires: newStatus ? inviteExpires : null,
+        },
+        select: { id: true, isActive: true, email: true, name: true, inviteToken: true },
     });
 
-    // If dismissed, send termination email
-    if (!updated.isActive) {
-        try {
+    // Handle notifications
+    try {
+        if (!updated.isActive) {
             await sendTerminationEmail({
                 email: updated.email,
                 name: updated.name,
             });
-        } catch (err) {
-            console.error("Termination email failed:", err);
+        } else if (updated.isActive && updated.inviteToken) {
+            await sendReinstatementEmail({
+                email: updated.email,
+                name: updated.name,
+                token: updated.inviteToken,
+            });
         }
+    } catch (err) {
+        console.error("Staff notification email failed:", err);
     }
 
     return NextResponse.json({ ok: true, isActive: updated.isActive });

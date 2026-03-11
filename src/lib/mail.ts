@@ -163,6 +163,44 @@ export async function sendPasswordResetEmail({
 
   return transporter.sendMail(mailOptions);
 }
+export async function sendReinstatementEmail({
+  email,
+  name,
+  token,
+}: {
+  email: string;
+  name: string;
+  token: string;
+}) {
+  if (!isSmtpConfigured()) {
+    throw new Error("SMTP is not configured. Please check your .env file.");
+  }
+
+  const welcomeLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/invite?token=${token}`;
+
+  const mailOptions = {
+    from: process.env.SMTP_FROM || '"Club POS" <vibzenight@gmail.com>',
+    to: email,
+    subject: "Welcome Back to the Team!",
+    text: `Hello ${name},\n\nWe are happy to inform you that you have been reinstated to the team at Club Liquor POS. Please click the link below to set up your password and access your account. This link expires in 24 hours.\n\n${welcomeLink}\n\nBest regards,\nClub Management`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #10b981;">Welcome Back!</h2>
+        <p>Hello <strong>${name}</strong>,</p>
+        <p>We are happy to inform you that you have been reinstated to the team at <strong>Club Liquor POS</strong>.</p>
+        <p>Please click the button below to set up your password and access your account:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${welcomeLink}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Set My Password</a>
+        </div>
+        <p style="color: #64748b; font-size: 12px;">This link will expire in 24 hours. If you didn't expect this, please contact management.</p>
+        <p>Best regards,<br>Club Management</p>
+      </div>
+    `,
+  };
+
+  return transporter.sendMail(mailOptions);
+}
+
 export async function sendTerminationEmail({
   email,
   name,
